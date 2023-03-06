@@ -65,7 +65,7 @@ app.post("/login", delayMiddleware, (req, res) => {
     const {email, password} = req.body;
 
     const user = users.find(
-        user => user.email == email && user.password == password
+        user => user.email === email && user.password === password
     );
 
     if (user) {
@@ -90,7 +90,7 @@ app.post("/login", delayMiddleware, (req, res) => {
 
 app.get("/profile", authMiddleware, delayMiddleware, (req, res) => {
     const {id} = req.user;
-    const user = users.find(user => user.id == id);
+    const user = users.find(user => user.id === id);
     if (user) {
         const {password, ...info} = user;
         res.json({
@@ -150,54 +150,56 @@ app.patch("/profile", authMiddleware, delayMiddleware, (req, res) => {
     const {username, email, password, about, avatar} = req.body;
     const {id} = req.user;
 
-    // здесь должна быть проверка валидности полей
-
-    const userIndex = users.findIndex(user => user.id == id);
-    if (userIndex == -1) {
-        return res.status(404).json({
-            error: "Пользователь не найден"
-        });
+    // Проверка на пустые поля
+    if (!username && !email && !password && !about && !avatar) {
+        return res.status(400).json({error: "Нет данных для обновления"});
     }
 
-    const isRegistered = users.some(user => user.email === email);
-    if (isRegistered) {
-        return res.status(400).json({error: "Пользователь с таким E-mail уже зарегистрирован"});
-    }
-
-    if (username && username.length < 3) {
-        res.status(400).json({
-            error: "Слишком короткое имя!"
-        });
-        return;
-    }
-
+    // Проверка валидности полей
     if (email && !validateEmail(email)) {
-        res.status(400).json({
-            error: "Некорректный адрес электронной почты!"
-        });
-        return;
+        return res.status(400).json({error: "Некорректный адрес электронной почты!"});
+    }
+    if (username && username.trim().length < 3) {
+        return res.status(400).json({error: "Слишком короткое имя"});
+    }
+    if (password && password.trim().length < 4) {
+        return res.status(400).json({error: "Слишком короткий пароль"});
     }
 
-    if (password && password.length < 4) {
-        res.status(400).json({
-            error: "Слишком короткий пароль!"
-        });
-        return;
+    if (about && about.trim().length < 3) {
+        return res.status(400).json({error: "Слишком короткое описание"});
     }
 
-    const updatedUser = {
-        ...users[userIndex],
-        username: username || users[userIndex].username,
-        email: email || users[userIndex].email,
-        about: about !== undefined ? about : users[userIndex].about,
-        avatar: avatar || users[userIndex].avatar,
-    };
+    // Проверка уникальности email
+    if (email) {
+        const userWithEmail = users.find(user => user.email === email.trim());
+        if (userWithEmail && userWithEmail.id !== id) {
+            return res.status(400).json({error: "Пользователь с таким E-mail уже зарегистрирован"});
+        }
+    }
 
-    users[userIndex] = updatedUser;
+    // Обновляем данные пользователя в массиве users
+    const user = users.find(user => user.id === id);
+    if (user) {
+        Object.assign(user, {
+            username: username ? username.trim() : user.username,
+            email: email ? email.trim() : user.email,
+            password: password ? password.trim() : user.password,
+            about: about ? about.trim() : user.about,
+            avatar: avatar ? avatar.trim() : user.avatar
+        });
 
-    res.json({
-        message: "Профиль успешно обновлен"
-    });
+        // Отправляем обновленные данные клиенту
+        const {password, ...info} = user;
+        res.json({
+            message: "Данные успешно обновлены",
+            data: info
+        });
+    } else {
+        res.status(400).json({
+            error: "Не удалось обновить информацию о пользователе"
+        });
+    }
 });
 
 // error handling
